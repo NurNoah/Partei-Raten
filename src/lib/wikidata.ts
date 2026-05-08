@@ -60,12 +60,6 @@ type WikidataEntityResponse = {
   }>;
 };
 
-type LivePoliticiansResponse = {
-  count?: number;
-  politicians?: Politician[];
-  source?: string;
-};
-
 export function normalizePartyName(partyName: string): string | null {
   const name = partyName
     .replace(/\u00ad/g, "")
@@ -89,6 +83,7 @@ export function normalizePartyName(partyName: string): string | null {
 
 const ABGEORDNETENWATCH_PAGE_SIZE = 80;
 const ABGEORDNETENWATCH_TOTAL_WITH_WIKIDATA = 2724;
+const ABGEORDNETENWATCH_SAMPLE_PAGES = 4;
 const CACHE_KEY = 'party-rate-politician-pool-v5';
 const CACHE_TTL = 1000 * 60 * 60 * 12;
 const LIVE_REFRESH_COOLDOWN = 1000 * 60 * 5;
@@ -186,10 +181,6 @@ function emitDataSourceStatus(status: DataSourceStatus): void {
   window.dispatchEvent(new CustomEvent<DataSourceStatus>('party-rate-data-source', { detail: status }));
 }
 
-function getLivePoliticiansUrl(): string {
-  return new URL('/api/politicians', window.location.origin).toString();
-}
-
 function getAbgeordnetenwatchUrl(page: number): string {
   const localUrl = new URL('/api/abgeordnetenwatch/politicians', window.location.origin);
   localUrl.searchParams.set('qid_wikidata[ne]', '');
@@ -248,25 +239,12 @@ async function fetchWikidataEntities(qids: string[]): Promise<WikidataEntityResp
   return fetchJson<WikidataEntityResponse>(getWikidataEntitiesUrl(qids), 5500);
 }
 
-async function loadWikidataPoliticianPool(): Promise<Politician[]> {
-  const response = await fetchJson<LivePoliticiansResponse>(getLivePoliticiansUrl(), 10000);
-  return Array.isArray(response.politicians) ? shuffledPoliticians(response.politicians) : [];
-}
-
 async function loadPoliticianPool(): Promise<Politician[]> {
-  try {
-    const wikidataPoliticians = await loadWikidataPoliticianPool();
-    if (wikidataPoliticians.length > 0) {
-      return wikidataPoliticians;
-    }
-  } catch (error) {
-    console.warn('Direct Wikidata politician endpoint failed, trying legacy API chain:', error);
-  }
-
+  console.info('[Partei Raten] Lade Live-Daten über Abgeordnetenwatch/Wikidata...');
   const randomPageCount = Math.ceil(ABGEORDNETENWATCH_TOTAL_WITH_WIKIDATA / ABGEORDNETENWATCH_PAGE_SIZE);
   const pages = new Set<number>();
 
-  while (pages.size < 8) {
+  while (pages.size < ABGEORDNETENWATCH_SAMPLE_PAGES) {
     pages.add(1 + Math.floor(Math.random() * randomPageCount));
   }
 
@@ -290,12 +268,12 @@ async function loadPoliticianPool(): Promise<Politician[]> {
     chunks.push(qids.slice(index, index + 50));
   }
 
-  for (const chunk of chunks) {
-    try {
-      const response = await fetchWikidataEntities(chunk);
-      Object.assign(entities, response.entities);
-    } catch (error) {
-      console.warn('Skipping one Wikidata entity batch:', error);
+  const entityResponses = await Promise.allSettled(chunks.map(fetchWikidataEntities));
+  for (const result of entityResponses) {
+    if (result.status === 'fulfilled') {
+      Object.assign(entities, result.value.entities);
+    } else {
+      console.warn('Skipping one Wikidata entity batch:', result.reason);
     }
   }
 
@@ -370,7 +348,7 @@ function refreshLivePoliticians(): Promise<Politician[]> {
     lastLiveRefreshAttempt = Date.now();
     emitDataSourceStatus({
       count: politicianPool.length,
-      message: 'Live-Daten werden geladen...',
+      message: 'Live-Daten werden über Abgeordnetenwatch/Wikidata geladen...',
       source: 'loading',
     });
     liveRefreshPromise = loadPoliticianPool()

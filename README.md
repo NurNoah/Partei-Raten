@@ -12,10 +12,10 @@ Ein modernes Web-Quiz, bei dem du die Parteizugehörigkeit deutscher Politiker:i
 
 ## So funktioniert's
 
-Die App sendet eine SPARQL-Abfrage an `https://query.wikidata.org/sparql`, um zufällige deutsche Politiker:innen zu finden, die:
-1. Eine deutsche Staatsangehörigkeit haben.
-2. Ein hinterlegtes Porträtbild besitzen.
-3. Einer Partei angehören.
+Die App lädt zufällige Politiker:innen über Abgeordnetenwatch und ergänzt die Porträtbilder über Wikidata. Dabei werden nur Personen genutzt, die:
+1. Einer der unterstützten Parteien angehören.
+2. Eine Wikidata-ID besitzen.
+3. Ein hinterlegtes Porträtbild besitzen.
 
 Der Name der Partei wird normalisiert (z. B. "Christlich Demokratische Union Deutschlands" -> "CDU"), um mit einer festen Liste bekannter deutscher Parteien abgeglichen zu werden.
 
@@ -43,7 +43,8 @@ Der Name der Partei wird normalisiert (z. B. "Christlich Demokratische Union Deu
 - **Tailwind CSS 4**
 - **Framer Motion** (Animationen)
 - **Lucide React** (Icons)
-- **Wikidata API** (SPARQL)
+- **Abgeordnetenwatch API**
+- **Wikidata API**
 
 ## Bildrechte
 
