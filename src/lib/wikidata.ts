@@ -175,31 +175,14 @@ function getAbgeordnetenwatchUrl(page: number): string {
   localUrl.searchParams.set('page', page.toString());
   localUrl.searchParams.set('pager_limit', ABGEORDNETENWATCH_PAGE_SIZE.toString());
 
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return localUrl.toString();
-  }
-
-  const remoteUrl = new URL('https://www.abgeordnetenwatch.de/api/v2/politicians');
-  remoteUrl.search = localUrl.search;
-  return remoteUrl.toString();
+  return localUrl.toString();
 }
 
 function getWikidataEntitiesUrl(ids: string[]): string {
   const joinedIds = ids.join('|');
-
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    const localUrl = new URL('/api/wikidata/entities', window.location.origin);
-    localUrl.searchParams.set('ids', joinedIds);
-    return localUrl.toString();
-  }
-
-  const remoteUrl = new URL('https://www.wikidata.org/w/api.php');
-  remoteUrl.searchParams.set('action', 'wbgetentities');
-  remoteUrl.searchParams.set('ids', joinedIds);
-  remoteUrl.searchParams.set('props', 'claims');
-  remoteUrl.searchParams.set('format', 'json');
-  remoteUrl.searchParams.set('origin', '*');
-  return remoteUrl.toString();
+  const localUrl = new URL('/api/wikidata/entities', window.location.origin);
+  localUrl.searchParams.set('ids', joinedIds);
+  return localUrl.toString();
 }
 
 async function fetchJson<T>(url: string, timeoutMs = 4500): Promise<T> {
@@ -413,7 +396,7 @@ export async function fetchRandomPolitician(excludeIds: string[] = [], allowedPa
   ensureFallbackPool();
 
   if (politicianPool.length <= FALLBACK_POLITICIANS.length && shouldRefreshLivePool()) {
-    void refreshLivePoliticians();
+    await refreshLivePoliticians();
   }
 
   let candidates = findPoliticianCandidates(excludeIds, allowedParties);
