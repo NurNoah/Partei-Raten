@@ -1,0 +1,6 @@
+{
+  "name": "Partei Raten",
+  "description": "Ein Quiz-Spiel, bei dem du die Parteizugehörigkeit deutscher Politiker anhand ihrer Bilder erraten musst. Die Daten werden live von Wikidata geladen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
