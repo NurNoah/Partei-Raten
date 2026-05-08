@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, Check, CheckCircle2, Clock, Flame, History, Loader2, SlidersHorizontal, Trophy, X, XCircle } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Clock, Flame, Github, History, Loader2, SlidersHorizontal, Trophy, X, XCircle } from 'lucide-react';
 import { fetchRandomPolitician, getPartyOptions, PARTIES, type Politician } from './lib/wikidata';
 
 import PoliticianCard from './components/PoliticianCard';
@@ -508,10 +508,15 @@ export default function App() {
         {/* Footer */}
         <footer className="mt-8 sm:mt-16 lg:mt-20 py-6 sm:py-8 border-t border-zinc-900 w-full flex flex-col md:flex-row items-center justify-between gap-4 text-zinc-600 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-zinc-800 rounded-full" />
-              <span>Kein Login nötig</span>
-            </div>
+            <a
+              href="https://github.com/NurNoah/Partei-Raten"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <Github className="h-3.5 w-3.5" />
+              <span>GitHub</span>
+            </a>
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-zinc-800 rounded-full" />
               <span>Partei Raten von</span>
