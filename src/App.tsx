@@ -41,6 +41,7 @@ const STORAGE_KEYS = {
 };
 
 const MIN_ENABLED_PARTIES = 4;
+const NEXT_QUESTION_DELAY_MS = 7000;
 
 function readStoredNumber(key: string): number {
   return Number(localStorage.getItem(key) || 0);
@@ -133,6 +134,18 @@ export default function App() {
   useEffect(() => {
     loadQuestion();
   }, []); // Initial load
+
+  useEffect(() => {
+    if (gameState !== 'revealed') return;
+
+    const nextQuestionTimeout = window.setTimeout(() => {
+      void loadQuestion();
+    }, NEXT_QUESTION_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(nextQuestionTimeout);
+    };
+  }, [gameState, loadQuestion]);
 
   useEffect(() => {
     const handleDataSourceStatus = (event: Event) => {
@@ -531,10 +544,34 @@ export default function App() {
                           pointerEvents: gameState === 'revealed' ? 'auto' : 'none',
                         }}
                         onClick={loadQuestion}
-                        className="group flex min-w-56 cursor-pointer items-center justify-center gap-3 px-7 py-4 bg-zinc-100 text-zinc-950 font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-white hover:scale-[1.03] active:scale-95 transition-all shadow-xl shadow-zinc-950/20"
+                        className="group relative flex min-w-56 cursor-pointer items-center justify-center gap-3 px-7 py-4 bg-zinc-100 text-zinc-950 font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-white hover:scale-[1.03] active:scale-95 transition-all shadow-xl shadow-zinc-950/20"
                         tabIndex={gameState === 'revealed' ? 0 : -1}
                         aria-hidden={gameState !== 'revealed'}
                       >
+                        {gameState === 'revealed' && (
+                          <svg
+                            key={selectedAnswer}
+                            className="pointer-events-none absolute -inset-1 h-[calc(100%+0.5rem)] w-[calc(100%+0.5rem)] overflow-visible"
+                            viewBox="0 0 224 58"
+                            preserveAspectRatio="none"
+                            aria-hidden="true"
+                          >
+                            <motion.rect
+                              x="2"
+                              y="2"
+                              width="220"
+                              height="54"
+                              rx="18"
+                              fill="none"
+                              stroke="rgb(16 185 129)"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              initial={{ pathLength: 1, opacity: 0.95 }}
+                              animate={{ pathLength: 0, opacity: 0.35 }}
+                              transition={{ duration: NEXT_QUESTION_DELAY_MS / 1000, ease: 'linear' }}
+                            />
+                          </svg>
+                        )}
                         Nächste Person
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                       </motion.button>
