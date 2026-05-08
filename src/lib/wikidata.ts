@@ -11,6 +11,12 @@ export type Politician = {
   personWikidataId: string;
 };
 
+export type DataSourceStatus = {
+  count?: number;
+  message: string;
+  source: 'cache' | 'fallback' | 'live' | 'loading';
+};
+
 export const PARTIES = [
   "CDU",
   "AfD",
@@ -54,6 +60,12 @@ type WikidataEntityResponse = {
   }>;
 };
 
+type LivePoliticiansResponse = {
+  count?: number;
+  politicians?: Politician[];
+  source?: string;
+};
+
 export function normalizePartyName(partyName: string): string | null {
   const name = partyName
     .replace(/\u00ad/g, "")
@@ -77,7 +89,7 @@ export function normalizePartyName(partyName: string): string | null {
 
 const ABGEORDNETENWATCH_PAGE_SIZE = 80;
 const ABGEORDNETENWATCH_TOTAL_WITH_WIKIDATA = 2724;
-const CACHE_KEY = 'party-rate-politician-pool-v4';
+const CACHE_KEY = 'party-rate-politician-pool-v5';
 const CACHE_TTL = 1000 * 60 * 60 * 12;
 const LIVE_REFRESH_COOLDOWN = 1000 * 60 * 5;
 
@@ -169,6 +181,15 @@ function shuffledPoliticians(politicians: Politician[]): Politician[] {
   return [...politicians].sort(() => 0.5 - Math.random());
 }
 
+function emitDataSourceStatus(status: DataSourceStatus): void {
+  console.info(`[Partei Raten] Datenquelle: ${status.source.toUpperCase()} - ${status.message}`, status);
+  window.dispatchEvent(new CustomEvent<DataSourceStatus>('party-rate-data-source', { detail: status }));
+}
+
+function getLivePoliticiansUrl(): string {
+  return new URL('/api/politicians', window.location.origin).toString();
+}
+
 function getAbgeordnetenwatchUrl(page: number): string {
   const localUrl = new URL('/api/abgeordnetenwatch/politicians', window.location.origin);
   localUrl.searchParams.set('qid_wikidata[ne]', '');
@@ -227,11 +248,25 @@ async function fetchWikidataEntities(qids: string[]): Promise<WikidataEntityResp
   return fetchJson<WikidataEntityResponse>(getWikidataEntitiesUrl(qids), 5500);
 }
 
+async function loadWikidataPoliticianPool(): Promise<Politician[]> {
+  const response = await fetchJson<LivePoliticiansResponse>(getLivePoliticiansUrl(), 10000);
+  return Array.isArray(response.politicians) ? shuffledPoliticians(response.politicians) : [];
+}
+
 async function loadPoliticianPool(): Promise<Politician[]> {
+  try {
+    const wikidataPoliticians = await loadWikidataPoliticianPool();
+    if (wikidataPoliticians.length > 0) {
+      return wikidataPoliticians;
+    }
+  } catch (error) {
+    console.warn('Direct Wikidata politician endpoint failed, trying legacy API chain:', error);
+  }
+
   const randomPageCount = Math.ceil(ABGEORDNETENWATCH_TOTAL_WITH_WIKIDATA / ABGEORDNETENWATCH_PAGE_SIZE);
   const pages = new Set<number>();
 
-  while (pages.size < 2) {
+  while (pages.size < 8) {
     pages.add(1 + Math.floor(Math.random() * randomPageCount));
   }
 
@@ -312,10 +347,12 @@ let politicianPool: Politician[] = readCachedPoliticians();
 let liveRefreshPromise: Promise<Politician[]> | null = null;
 let lastLiveRefreshAttempt = 0;
 let lastLiveRefreshFailure = 0;
+let currentDataSource: DataSourceStatus['source'] = politicianPool.length > 0 ? 'cache' : 'fallback';
 
 function ensureFallbackPool(): void {
   if (politicianPool.length === 0) {
     politicianPool = shuffledPoliticians(FALLBACK_POLITICIANS);
+    currentDataSource = 'fallback';
   }
 }
 
@@ -331,6 +368,11 @@ function shouldRefreshLivePool(): boolean {
 function refreshLivePoliticians(): Promise<Politician[]> {
   if (!liveRefreshPromise) {
     lastLiveRefreshAttempt = Date.now();
+    emitDataSourceStatus({
+      count: politicianPool.length,
+      message: 'Live-Daten werden geladen...',
+      source: 'loading',
+    });
     liveRefreshPromise = loadPoliticianPool()
       .then(livePoliticians => {
         if (livePoliticians.length > 0) {
@@ -339,7 +381,19 @@ function refreshLivePoliticians(): Promise<Politician[]> {
             ...politicianPool,
             ...livePoliticians.filter(politician => !knownIds.has(politician.personWikidataId)),
           ]);
+          currentDataSource = 'live';
           writeCachedPoliticians(politicianPool);
+          emitDataSourceStatus({
+            count: politicianPool.length,
+            message: `${livePoliticians.length} Live-Politiker geladen`,
+            source: 'live',
+          });
+        } else {
+          emitDataSourceStatus({
+            count: politicianPool.length,
+            message: 'Live-API hat keine passenden Politiker geliefert',
+            source: 'fallback',
+          });
         }
 
         return politicianPool;
@@ -348,6 +402,11 @@ function refreshLivePoliticians(): Promise<Politician[]> {
         lastLiveRefreshFailure = Date.now();
         console.warn('Using cached or curated politician data because live APIs are unavailable:', error);
         ensureFallbackPool();
+        emitDataSourceStatus({
+          count: politicianPool.length,
+          message: 'Fallback aktiv: Live-API nicht erreichbar',
+          source: 'fallback',
+        });
 
         return politicianPool;
       })
@@ -393,6 +452,14 @@ function findPoliticianCandidates(excludeIds: string[], allowedParties: string[]
 }
 
 export async function fetchRandomPolitician(excludeIds: string[] = [], allowedParties: string[] = PARTIES): Promise<Politician> {
+  if (politicianPool.length > FALLBACK_POLITICIANS.length && currentDataSource === 'cache') {
+    emitDataSourceStatus({
+      count: politicianPool.length,
+      message: `${politicianPool.length} Politiker aus Browser-Cache`,
+      source: 'cache',
+    });
+  }
+
   ensureFallbackPool();
 
   if (politicianPool.length <= FALLBACK_POLITICIANS.length && shouldRefreshLivePool()) {
@@ -407,6 +474,14 @@ export async function fetchRandomPolitician(excludeIds: string[] = [], allowedPa
 
   if (candidates.length === 0) {
     throw new Error('Could not find a suitable politician.');
+  }
+
+  if (currentDataSource === 'fallback') {
+    emitDataSourceStatus({
+      count: politicianPool.length,
+      message: 'Fallback aktiv',
+      source: 'fallback',
+    });
   }
 
   return candidates[Math.floor(Math.random() * candidates.length)];

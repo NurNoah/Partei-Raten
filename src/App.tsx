@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Check, CheckCircle2, Clock, Flame, Github, History, Loader2, SlidersHorizontal, Trophy, X, XCircle } from 'lucide-react';
-import { fetchRandomPolitician, getPartyOptions, PARTIES, type Politician } from './lib/wikidata';
+import { fetchRandomPolitician, getPartyOptions, PARTIES, type DataSourceStatus, type Politician } from './lib/wikidata';
 
 import PoliticianCard from './components/PoliticianCard';
 import AnswerOptions from './components/AnswerOptions';
@@ -78,6 +78,10 @@ export default function App() {
   const [options, setOptions] = useState<string[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [modalView, setModalView] = useState<ModalView>(null);
+  const [dataSourceStatus, setDataSourceStatus] = useState<DataSourceStatus>({
+    message: 'Datenquelle wird geprüft...',
+    source: 'loading',
+  });
   
   // Stats
   const [score, setScore] = useState(() => readStoredNumber(STORAGE_KEYS.score));
@@ -129,6 +133,19 @@ export default function App() {
   useEffect(() => {
     loadQuestion();
   }, []); // Initial load
+
+  useEffect(() => {
+    const handleDataSourceStatus = (event: Event) => {
+      const detail = (event as CustomEvent<DataSourceStatus>).detail;
+      setDataSourceStatus(detail);
+    };
+
+    window.addEventListener('party-rate-data-source', handleDataSourceStatus);
+
+    return () => {
+      window.removeEventListener('party-rate-data-source', handleDataSourceStatus);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.score, score.toString());
@@ -387,8 +404,32 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             className="hidden sm:flex items-center gap-3 px-4 py-1 bg-zinc-900 border border-zinc-800 rounded-full mb-2"
           >
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <div className={`w-2 h-2 rounded-full animate-pulse ${
+              dataSourceStatus.source === 'fallback'
+                ? 'bg-red-500'
+                : dataSourceStatus.source === 'loading'
+                  ? 'bg-yellow-500'
+                  : 'bg-emerald-500'
+            }`} />
             <span className="text-[10px] uppercase font-black tracking-[0.3em] text-zinc-400">Deutsche Parteien</span>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] ${
+                dataSourceStatus.source === 'fallback'
+                  ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                  : dataSourceStatus.source === 'loading'
+                    ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300'
+                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+              }`}
+              title={dataSourceStatus.message}
+            >
+              {dataSourceStatus.source === 'fallback'
+                ? 'Fallback'
+                : dataSourceStatus.source === 'cache'
+                  ? `Cache ${dataSourceStatus.count ?? ''}`
+                  : dataSourceStatus.source === 'live'
+                    ? `Live ${dataSourceStatus.count ?? ''}`
+                    : 'Lädt'}
+            </span>
           </motion.div>
           <h1 className="text-3xl sm:text-4xl md:text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-500">
             Partei Raten
